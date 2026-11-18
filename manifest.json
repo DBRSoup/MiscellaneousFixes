@@ -1,0 +1,9 @@
+{
+  "name": "MiscellaneousFixes",
+  "description": "Fixing some bugs and calculations that annoy me.",
+  "version_number": "1.5.2",
+  "website_url": "https://github.com/DBRSoup/MiscellaneousFixes",
+  "dependencies": [
+    "BepInEx-BepInExPack_Mycopunk-5.4.2403"
+  ]
+}
