@@ -1,6 +1,7 @@
 ﻿using BepInEx;
 using BepInEx.Logging;
 using HarmonyLib;
+using Pigeon.Movement;
 using System;
 using System.Collections.Generic;
 using System.Reflection;
@@ -15,7 +16,7 @@ public class Plugin : BaseUnityPlugin
 
     public const string PLUGIN_GUID = "DBR.MiscFixes";
     public const string PLUGIN_NAME = "MiscFixes";
-    public const string PLUGIN_VERSION = "1.5.2";
+    public const string PLUGIN_VERSION = "1.6.0";
 
     private void Awake()
     {
@@ -79,7 +80,7 @@ public class Plugin : BaseUnityPlugin
     {
         private static bool Prefix(UpgradeProperty_ThrowableCooldown __instance, UpgradeInstance upgrade, ref IEnumerator<StatData> __result)
         {
-            if (upgrade?.Upgrade?.name == "ShieldBlocks")
+            if (upgrade?.Upgrade?.APIName == "ShieldBlocks")
             {
                 __result = GetStatData(__instance, UpgradeProperty.GetPatternSizeRatio(upgrade));
                 return false;
@@ -100,7 +101,7 @@ public class Plugin : BaseUnityPlugin
     {
         private static bool Prefix(UpgradeProperty_ThrowableCooldown __instance, UpgradeInstance upgrade, IGear gear)
         {
-            if (upgrade?.Upgrade?.name == "ShieldBlocks")
+            if (upgrade?.Upgrade?.APIName == "ShieldBlocks")
             {
                 if (gear is IActivatedAbility activatedAbility)
                 {
@@ -196,5 +197,42 @@ public class Plugin : BaseUnityPlugin
         }
     }
     #endregion
+
+    #region WithYou
+
+    [HarmonyPatch(typeof(SetFlagsPlayerUpgrade), nameof(SetFlagsPlayerUpgrade.Apply))]
+    public static class WithYouFix
+    {
+        [HarmonyPrefix]
+        private static void Prefix(UpgradeInstance instance)
+        {
+            if (instance?.Upgrade?.APIName == "With You")
+            {
+                if (instance.Upgrade is SetFlagsPlayerUpgrade flagUpgrade)
+                {
+                    AccessTools.FieldRef<SetFlagsPlayerUpgrade, PlayerUpgradeFlagField> flags = AccessTools.FieldRefAccess<SetFlagsPlayerUpgrade, PlayerUpgradeFlagField>("flags");
+                    flags(flagUpgrade).flags = PlayerUpgradeFlags.UserDefined4;
+                }
+
+            }
+        }
+    }
+
+    #endregion
+
+    //[HarmonyPatch(typeof(Player), "ApplyUpgrade")]
+    //public static class DisplayUpgradeTypes
+    //{
+    //    [HarmonyPostfix]
+    //    private static void Postfix(UpgradeInstance upgrade)
+    //    {
+    //        Logger.LogInfo($"{upgrade?.Upgrade?.Name} /// {upgrade?.Upgrade?.APIName} /// {upgrade?.Upgrade?.GetType().Name}");
+    //        if (upgrade.Upgrade is SetFlagsPlayerUpgrade flagUpgrade)
+    //        {
+    //            AccessTools.FieldRef<SetFlagsPlayerUpgrade, PlayerUpgradeFlagField> flags = AccessTools.FieldRefAccess<SetFlagsPlayerUpgrade, PlayerUpgradeFlagField>("flags");
+    //            Logger.LogInfo($"{flags(flagUpgrade)} /// {flags(flagUpgrade).flags} /// {flags(flagUpgrade).character}");
+    //        }
+    //    }
+    //}
 
 }
