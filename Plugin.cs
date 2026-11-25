@@ -6,6 +6,8 @@ using System;
 using System.Collections.Generic;
 using System.Reflection;
 using System.Reflection.Emit;
+using UnityEngine;
+
 namespace MiscFixes;
 
 [MycoMod(null, ModFlags.IsClientSide)]
@@ -16,7 +18,7 @@ public class Plugin : BaseUnityPlugin
 
     public const string PLUGIN_GUID = "DBR.MiscFixes";
     public const string PLUGIN_NAME = "MiscFixes";
-    public const string PLUGIN_VERSION = "1.6.0";
+    public const string PLUGIN_VERSION = "1.7.1";
 
     private void Awake()
     {
@@ -125,37 +127,6 @@ public class Plugin : BaseUnityPlugin
 
     #endregion
 
-    #region Cannonball
-    [HarmonyPatch(typeof(NoseDiveUpgrade), nameof(NoseDiveUpgrade.TriggerNoseDive))]
-    public static class CannonballPatch
-    {
-        [HarmonyTranspiler]
-        static IEnumerable<CodeInstruction> Transpiler(IEnumerable<CodeInstruction> instructions)
-        {
-            List<CodeInstruction> codes = new List<CodeInstruction>(instructions);
-
-            for (int i = 0; i < codes.Count - 3; i++)
-            {
-                // potency (argument 3)
-                if (codes[i].opcode == OpCodes.Ldarg_3 &&
-                    codes[i + 1].opcode == OpCodes.Ldarg_S &&
-                    codes[i + 2].opcode == OpCodes.Mul &&
-                    codes[i + 3].opcode == OpCodes.Mul)
-                {
-                    codes.RemoveAt(i + 2);
-                    codes.RemoveAt(i);
-
-                    Logger.LogInfo("[Cannonball] Successfully removed damage potency multiplier");
-
-                    break;
-                }
-            }
-
-            return codes;
-        }
-    }
-    #endregion
-
     #region Accelerator
     [HarmonyPatch(typeof(AcceleratorGun), "OnBurstFinished")]
     public static class RocketDamagePatch
@@ -196,6 +167,42 @@ public class Plugin : BaseUnityPlugin
             return codes;
         }
     }
+
+
+    [HarmonyPatch]
+    public static class AcceleratorSpeedDamageFix
+    {
+        static IEnumerable<MethodBase> TargetMethods()
+        {
+            yield return AccessTools.Method(typeof(AcceleratorGun), nameof(AcceleratorGun.GetSpeedToDamageMultiplier), [] );
+
+            yield return AccessTools.Method(typeof(AcceleratorGun), nameof(AcceleratorGun.GetSpeedToDamageMultiplier), [typeof(float).MakeByRefType()] );
+        }
+
+        [HarmonyTranspiler]
+        static IEnumerable<CodeInstruction> Transpiler(IEnumerable<CodeInstruction> instructions, MethodBase method)
+        {
+            MethodInfo DefaultMoveSpeedGetter = AccessTools.PropertyGetter(typeof(Player), nameof(Player.DefaultMoveSpeed) );
+
+            MethodInfo WalkSpeedGetter = AccessTools.PropertyGetter(typeof(Player), nameof(Player.WalkSpeed) );
+
+            List<CodeInstruction> codes = new List<CodeInstruction>(instructions);
+
+            for (int i = 0; i < codes.Count; i++)
+            {
+                if (!codes[i].Calls(DefaultMoveSpeedGetter))
+                    continue;
+
+                codes[i] = new CodeInstruction(OpCodes.Callvirt, WalkSpeedGetter);
+
+
+                Logger.LogInfo($"[Inertia Accelerant] Successfully replaced DefaultMoveSpeed with WalkSpeed in {method}");
+            }
+
+            return codes;
+        }
+    }
+
     #endregion
 
     #region WithYou
@@ -214,6 +221,25 @@ public class Plugin : BaseUnityPlugin
                     flags(flagUpgrade).flags = PlayerUpgradeFlags.UserDefined4;
                 }
 
+            }
+        }
+    }
+
+    #endregion
+
+    #region Sprinting
+
+    [HarmonyPatch(typeof(GunData), nameof(GunData.UpdateWantsToFire))]
+    public static class FireWhileSprintingSpawnFix
+    {
+        public static void Postfix(Player player, ref bool __result, ref GunData __instance, bool isAiming, bool reloading, float lastPressedFireTime, float lastFireTime)
+        {
+            if (__result == true)
+                return;
+
+            if (__instance.fireConstraints.canFireWhileSprinting == FireConstraints.ActionFireMode.CanPerformDuring && !player.IsSprinting && player.IsRunning && !isAiming && (__instance.fireConstraints.canReloadWhileSprinting != FireConstraints.ActionFireMode.StopActionAndPerform || !reloading) && Time.time - Mathf.Max(lastFireTime, lastPressedFireTime) > 0.5f)
+            {
+                player.ResumeSprint();
             }
         }
     }
